@@ -9,57 +9,57 @@ The Passport PKI Demo implements a two-layer security architecture combining tra
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Storage Service                              │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │               JWT Validation                            │   │
-│  │  1. Validate Account JWT signature                     │   │
-│  │  2. Verify certificate chain → Passport root CA       │   │
-│  │  3. Extract user JWT from certificate extension       │   │
-│  │  4. Validate user JWT with UserAuth module            │   │
-│  │  5. Apply user-based authorization rules              │   │
-│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │               JWT Validation                            │    │
+│  │  1. Validate Account JWT signature                      │    │
+│  │  2. Verify certificate chain → Passport root CA         │    │
+│  │  3. Extract user JWT from certificate extension         │    │
+│  │  4. Validate user JWT with UserAuth module              │    │
+│  │  5. Apply user-based authorization rules                │    │
+│  └─────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
                               ↑
                     Account JWT with x5c chain
                               │
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Account Service                              │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │           Certificate Structure                         │   │
-│  │  ┌─────────────────────────────────────────────────┐   │   │
-│  │  │  Account Certificate (x509)                     │   │   │
-│  │  │  ├── Subject: Account-Alice (CompanyA)          │   │   │
-│  │  │  ├── Signed by: USRegion CA                     │   │   │
-│  │  │  └── Extensions:                                │   │   │
-│  │  │      └── OID 1.3.6.1.4.1.999.1.1 (User JWT)   │   │   │
-│  │  │          └── "eyJ0eXAiOiJKV1QiLCJhbGciOi..."    │   │   │
-│  │  └─────────────────────────────────────────────────┘   │   │
-│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │           Certificate Structure                         │    │
+│  │  ┌─────────────────────────────────────────────────┐    │    │
+│  │  │  Account Certificate (x509)                     │    │    │
+│  │  │  ├── Subject: Account-Alice (CompanyA)          │    │    │
+│  │  │  ├── Signed by: USRegion CA                     │    │    │
+│  │  │  └── Extensions:                                │    │    │
+│  │  │      └── OID 1.3.6.1.4.1.999.1.1 (User JWT)     │    │    │
+│  │  │          └── "eyJ0eXAiOiJKV1QiLCJhbGciOi..."    │    │    │
+│  │  └─────────────────────────────────────────────────┘    │    │
+│  └─────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Component Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Application Layer                           │
-├─────────────────────────────────────────────────────────────────┤
+┌───────────────────────────────────────────────────────────────────┐
+│                    Application Layer                              │
+├───────────────────────────────────────────────────────────────────┤
 │  cmd/basic-demo/     │  cmd/enhanced-demo/  │  cmd/jwt-inspector/ │
 │  Basic PKI Demo      │  Enhanced User Demo  │  JWT Analysis Tool  │
-└─────────────────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────────────────┘
                               │
-┌─────────────────────────────────────────────────────────────────┐
-│                    Core Library Layer                          │
-├─────────────────────────────────────────────────────────────────┤
+┌───────────────────────────────────────────────────────────────────┐
+│                    Core Library Layer                             │
+├───────────────────────────────────────────────────────────────────┤
 │  internal/pki/       │  internal/userauth/  │  internal/jwks/     │
-│  Certificate Ops    │  User JWT Embedding  │  JWKS Generation    │
-└─────────────────────────────────────────────────────────────────┘
+│  Certificate Ops    │  User JWT Embedding  │  JWKS Generation     │
+└───────────────────────────────────────────────────────────────────┘
                               │
-┌─────────────────────────────────────────────────────────────────┐
-│                    External Dependencies                       │
-├─────────────────────────────────────────────────────────────────┤
+┌───────────────────────────────────────────────────────────────────┐
+│                    External Dependencies                          │
+├───────────────────────────────────────────────────────────────────┤
 │  crypto/x509         │  crypto/ecdsa        │  golang-jwt/jwt     │
 │  Standard Go PKI     │  Elliptic Curves     │  JWT Operations     │
-└─────────────────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ## Security Model
