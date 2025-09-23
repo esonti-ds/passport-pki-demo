@@ -13,22 +13,22 @@ import (
 	"strings"
 	"time"
 
-	"passport-pki-demo/internal/userauth"
+	s2sauthz "passport-pki-demo/internal/s2s-auth-authz"
 )
 
 // Simple helper to create a demo certificate with embedded user JWT
 func createDemoCert() (*x509.Certificate, string, error) {
-	// Create a demo user
-	user := userauth.User{
-		ID:     "demo-user-123",
-		Email:  "demo@example.com",
-		Roles:  []string{"user", "storage-read"},
-		Tenant: "DemoTenant",
+	// Create a demo healthcare user
+	user := s2sauthz.User{
+		ID:     "dr-demo-123",
+		Email:  "dr.demo@hospital.com",
+		Roles:  []string{"doctor", "patient-read", "patient-write", "media-read", "storage-read"},
+		Tenant: "DemoHospital",
 		Region: "US",
 	}
 
 	// Create user auth module and JWT
-	userAuth, err := userauth.NewUserAuthModule()
+	userAuth, err := s2sauthz.NewUserAuthModule()
 	if err != nil {
 		return nil, "", err
 	}
@@ -46,14 +46,14 @@ func createDemoCert() (*x509.Certificate, string, error) {
 
 	// Create custom extension with user JWT
 	userJWTExtension := pkix.Extension{
-		Id:       userauth.UserJWTExtensionOID,
+		Id:       s2sauthz.UserJWTExtensionOID,
 		Critical: false,
 		Value:    []byte(userJWT),
 	}
 
 	template := x509.Certificate{
 		SerialNumber:    big.NewInt(1),
-		Subject:         pkix.Name{CommonName: "Demo-Account", Organization: []string{user.Tenant}},
+		Subject:         pkix.Name{CommonName: "PatientService-Demo", Organization: []string{user.Tenant}},
 		NotBefore:       time.Now(),
 		NotAfter:        time.Now().Add(365 * 24 * time.Hour),
 		KeyUsage:        x509.KeyUsageDigitalSignature,
@@ -109,28 +109,29 @@ func decodeJWT(tokenString string) {
 }
 
 func main() {
-	fmt.Println("=== User JWT Extraction and Inspection Tool ===")
+	fmt.Println("=== JWT Extractor Demo ===")
+	fmt.Println("Demonstrating Service Passport creation and JWT extraction in healthcare service certificates")
 	fmt.Println()
 
 	// Create a demo certificate with embedded user JWT
-	fmt.Println("1. Creating Demo Certificate with Embedded User JWT")
+	fmt.Println("1. Creating Demo Healthcare Service Passport with Embedded User JWT")
 	cert, originalUserJWT, err := createDemoCert()
 	if err != nil {
 		fmt.Printf("Error creating demo cert: %v\n", err)
 		return
 	}
-	fmt.Printf("   ✓ Certificate created with embedded user JWT\n")
-	fmt.Printf("   Certificate Subject: %s\n", cert.Subject.CommonName)
-	fmt.Printf("   Certificate Org: %v\n", cert.Subject.Organization)
+	fmt.Printf("   ✓ Service Certificate created with embedded User JWT (Service Passport)\n")
+	fmt.Printf("   Service Name: %s\n", cert.Subject.CommonName)
+	fmt.Printf("   Healthcare Organization: %v\n", cert.Subject.Organization)
 
 	// Extract user JWT from certificate
-	fmt.Println("\n2. Extracting User JWT from Certificate")
-	extractedUserJWT, err := userauth.ExtractUserJWTFromCert(cert)
+	fmt.Println("\n2. Extracting User JWT from Service Passport")
+	extractedUserJWT, err := s2sauthz.ExtractUserJWTFromServicePassport(cert)
 	if err != nil {
 		fmt.Printf("   ❌ Failed to extract user JWT: %v\n", err)
 		return
 	}
-	fmt.Printf("   ✓ User JWT successfully extracted\n")
+	fmt.Printf("   ✓ User JWT successfully extracted from Service Passport\n")
 	fmt.Printf("   JWT Length: %d characters\n", len(extractedUserJWT))
 
 	// Verify the extracted JWT matches the original
@@ -149,25 +150,26 @@ func main() {
 		fmt.Printf("     Critical: %v\n", ext.Critical)
 		fmt.Printf("     Value length: %d bytes\n", len(ext.Value))
 
-		if ext.Id.Equal(userauth.UserJWTExtensionOID) {
-			fmt.Printf("     ↳ This is the User JWT extension!\n")
-			fmt.Printf("     ↳ Contains: JWT token for user authorization\n")
+		if ext.Id.Equal(s2sauthz.UserJWTExtensionOID) {
+			fmt.Printf("     ↳ This is the User JWT extension (creates Service Passport)!\n")
+			fmt.Printf("     ↳ Contains: JWT token for S2S Authn + Authz\n")
 		}
 		fmt.Println()
 	}
 
-	fmt.Println("=== How Storage Would Use This ===")
-	fmt.Println("1. Receive Account JWT with x5c certificate chain")
-	fmt.Println("2. Validate certificate chain back to Passport root CA")
+	fmt.Println("=== How Healthcare Services Would Use Service Passports ===")
+	fmt.Println("1. Receive Service Passport JWT with x5c certificate chain from Prod Region service")
+	fmt.Println("2. Validate certificate chain back to Prod Root")
 	fmt.Println("3. Extract leaf certificate from x5c[0]")
 	fmt.Println("4. Look for User JWT extension in leaf certificate")
 	fmt.Println("5. Extract and validate the embedded user JWT")
-	fmt.Println("6. Use user information for authorization decisions")
+	fmt.Println("6. Use healthcare user information for authorization decisions")
 	fmt.Println()
-	fmt.Println("🔐 This enables:")
-	fmt.Println("   ✓ Account-level authentication (PKI)")
-	fmt.Println("   ✓ User-level authorization (embedded JWT)")
-	fmt.Println("   ✓ Fine-grained access control")
-	fmt.Println("   ✓ Cross-region user context")
-	fmt.Println("   ✓ Separate user auth module")
+	fmt.Println("🔐 This enables healthcare scenarios:")
+	fmt.Println("   ✓ S2S Authn (Service Certificate)")
+	fmt.Println("   ✓ S2S Authn + Authz (Service Passport with User JWT)")
+	fmt.Println("   ✓ Fine-grained healthcare role-based access control")
+	fmt.Println("   ✓ Cross-Prod Region medical data access")
+	fmt.Println("   ✓ HIPAA-compliant user context preservation")
+	fmt.Println("   ✓ Separate user auth module for healthcare compliance")
 }

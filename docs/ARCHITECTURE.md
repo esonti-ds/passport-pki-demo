@@ -1,34 +1,34 @@
-# Project Architecture
+# Service Passport Architecture
 
 ## Overview
 
-The Passport PKI Demo implements a two-layer security architecture combining traditional PKI certificate chains with embedded user JWTs for fine-grained authorization.
+The Passport PKI Demo implements a two-layer security architecture combining traditional PKI certificate chains with embedded user JWTs for fine-grained authorization. This creates "Service Passports" that enable both Service-to-Service Authentication (S2S Authn) and Service-to-Service Authentication + Authorization (S2S Authn + Authz).
 
 ## Visual Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Storage Service                              │
+│                    StorageService (Global)                      │
 │  ┌─────────────────────────────────────────────────────────┐    │
-│  │               JWT Validation                            │    │
-│  │  1. Validate Account JWT signature                      │    │
-│  │  2. Verify certificate chain → Passport root CA         │    │
-│  │  3. Extract user JWT from certificate extension         │    │
-│  │  4. Validate user JWT with UserAuth module              │    │
-│  │  5. Apply user-based authorization rules                │    │
+│  │               Service Passport Validation               │    │
+│  │  1. Validate Service Passport JWT signature             │    │
+│  │  2. Verify certificate chain → Prod Root CA             │    │
+│  │  3. Extract user JWT from Service Passport extension    │    │
+│  │  4. Validate user JWT with S2S Auth+Authz module        │    │
+│  │  5. Apply healthcare user-based authorization rules     │    │
 │  └─────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
                               ↑
-                    Account JWT with x5c chain
+                    Service Passport JWT with x5c chain
                               │
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Account Service                              │
+│                PatientService-US (Prod Region)                  │
 │  ┌─────────────────────────────────────────────────────────┐    │
-│  │           Certificate Structure                         │    │
+│  │           Service Passport Structure                    │    │
 │  │  ┌─────────────────────────────────────────────────┐    │    │
-│  │  │  Account Certificate (x509)                     │    │    │
-│  │  │  ├── Subject: Account-Alice (CompanyA)          │    │    │
-│  │  │  ├── Signed by: USRegion CA                     │    │    │
+│  │  │  Service Certificate (x509)                     │    │    │
+│  │  │  ├── Subject: PatientService-US (HospitalA)     │    │    │
+│  │  │  ├── Signed by: Prod Region US CA               │    │    │
 │  │  │  └── Extensions:                                │    │    │
 │  │  │      └── OID 1.3.6.1.4.1.999.1.1 (User JWT)     │    │    │
 │  │  │          └── "eyJ0eXAiOiJKV1QiLCJhbGciOi..."    │    │    │
@@ -43,15 +43,19 @@ The Passport PKI Demo implements a two-layer security architecture combining tra
 ┌───────────────────────────────────────────────────────────────────┐
 │                    Application Layer                              │
 ├───────────────────────────────────────────────────────────────────┤
-│  cmd/basic-demo/     │  cmd/enhanced-demo/  │  cmd/jwt-inspector/ │
-│  Basic PKI Demo      │  Enhanced User Demo  │  JWT Analysis Tool  │
+│  cmd/s2s-authn-demo/ │  cmd/s2s-authn-user-  │  cmd/jwt-extractor-│
+│  Basic S2S Authn     │  authz-demo/          │  demo/             │
+│  Demo                │  S2S Authn+Authz Demo │  Service Passport  │
+│                      │                       │  Analysis Tool     │
 └───────────────────────────────────────────────────────────────────┘
                               │
 ┌───────────────────────────────────────────────────────────────────┐
 │                    Core Library Layer                             │
 ├───────────────────────────────────────────────────────────────────┤
-│  internal/pki/       │  internal/userauth/  │  internal/jwks/     │
-│  Certificate Ops    │  User JWT Embedding  │  JWKS Generation     │
+│  internal/pki/       │  internal/s2s-auth-    │  internal/jwks/   │
+│  Service Certificate │  authz/                │  JWKS Generation  │
+│  Operations          │  Service Passport      │                   │
+│                      │  Management            │                   │
 └───────────────────────────────────────────────────────────────────┘
                               │
 ┌───────────────────────────────────────────────────────────────────┐
@@ -64,57 +68,57 @@ The Passport PKI Demo implements a two-layer security architecture combining tra
 
 ## Security Model
 
-### Traditional PKI Layer (Layer 1)
+### Traditional PKI Layer (S2S Authentication)
 
-**Purpose**: Account-level authentication and regional authority validation
+**Purpose**: Service-level authentication and Prod Region authority validation
 
 **Components**:
-- Root CA (Passport): The ultimate trust anchor
-- Regional Intermediate CAs: USRegion, EuropeRegion, AsiaRegion, GlobalRegion
-- End Entity Certificates: Account certificates and Storage certificate
+- Prod Root CA (Passport): The ultimate trust anchor
+- Prod Region CAs: US, Europe, Asia, Global
+- Service Certificates: Service certificates for individual services
 
 **Flow**:
-1. Account obtains certificate from regional CA
-2. Regional CA certificate is signed by Passport root CA
-3. JWT is signed with Account private key
+1. Service obtains Service Certificate from Prod Region CA
+2. Prod Region CA certificate is signed by Prod Root CA
+3. JWT is signed with Service private key
 4. Certificate chain (x5c) is embedded in JWT header
-5. Storage validates chain back to trusted Passport root
+5. StorageService validates chain back to trusted Prod Root
 
-### User JWT Layer (Layer 2)
+### Service Passport Layer (S2S Authentication + Authorization)
 
-**Purpose**: User-level authorization and fine-grained permissions
+**Purpose**: User-level authorization and fine-grained healthcare permissions
 
 **Components**:
-- UserAuth Module: Independent JWT signing authority
-- User JWT: Contains user identity, roles, tenant information
-- Certificate Extension: Custom OID stores user JWT in Account certificate
+- S2S Authentication + Authorization Module: Independent JWT signing authority
+- User JWT: Contains user identity, healthcare roles, tenant information
+- Service Certificate Extension: Custom OID stores user JWT in Service Certificate
 
 **Flow**:
-1. UserAuth module creates user-specific JWT
-2. User JWT is embedded in Account certificate as extension
-3. Account JWT includes certificate with embedded user JWT
-4. Storage extracts and validates both layers independently
-5. User roles determine allowed operations
+1. S2S Auth+Authz module creates healthcare user-specific JWT
+2. User JWT is embedded in Service Certificate as extension (creates Service Passport)
+3. Service Passport JWT includes certificate with embedded user JWT
+4. StorageService extracts and validates both layers independently
+5. Healthcare user roles determine allowed medical operations
 
 ## Validation Workflow
 
-### Storage Service Process:
-1. **Receive Account JWT**: With x5c header containing certificate chain
-2. **Validate Certificate Chain**: Verify chain back to trusted Passport root CA
-3. **Extract Leaf Certificate**: Get Account certificate from x5c[0]
+### StorageService Process:
+1. **Receive Service Passport JWT**: With x5c header containing certificate chain
+2. **Validate Service Certificate Chain**: Verify chain back to trusted Prod Root CA
+3. **Extract Leaf Service Certificate**: Get Service Certificate from x5c[0]
 4. **Find User JWT Extension**: Look for OID 1.3.6.1.4.1.999.1.1
-5. **Validate User JWT**: Use UserAuth module to verify user token
-6. **Apply Authorization**: Check user roles against requested action
+5. **Validate User JWT**: Use S2S Auth+Authz module to verify user token
+6. **Apply Healthcare Authorization**: Check user healthcare roles against requested medical action
 
 ## Data Structures
 
-### Certificate Extensions
+### Service Certificate Extensions (Service Passport)
 
 ```go
-// Custom OID for user JWT storage
+// Custom OID for user JWT storage in Service Passports
 var UserJWTExtensionOID = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 999, 1, 1}
 
-// Extension structure
+// Extension structure for Service Passport
 userJWTExtension := pkix.Extension{
     Id:       UserJWTExtensionOID,
     Critical: false,           // Non-critical extension
@@ -122,42 +126,44 @@ userJWTExtension := pkix.Extension{
 }
 ```
 
-### User Information
+### Healthcare User Information
 
 ```go
 type User struct {
-    ID     string   `json:"id"`     // Unique user identifier
-    Email  string   `json:"email"`  // User email address
-    Roles  []string `json:"roles"`  // List of user roles
-    Tenant string   `json:"tenant"` // Tenant/organization
-    Region string   `json:"region"` // User's home region
+    ID     string   `json:"id"`     // Unique healthcare user identifier
+    Email  string   `json:"email"`  // Healthcare user email address
+    Roles  []string `json:"roles"`  // List of healthcare user roles
+    Tenant string   `json:"tenant"` // Healthcare organization
+    Region string   `json:"region"` // User's home Prod Region
 }
 ```
 
 ### JWT Claims Structure
 
-**Account JWT Claims**:
+**Service Passport JWT Claims**:
 ```json
 {
-  "sub": "account-session-id",
+  "sub": "service-session-id",
   "scope": "access_storage",
   "action": "read",
-  "user_id": "alice-123",
-  "user_email": "alice@company.com",
-  "user_tenant": "CompanyA",
+  "user_id": "dr-alice-123",
+  "user_email": "alice.doctor@hospital.com",
+  "user_tenant": "HospitalA",
   "has_embedded_user_auth": true,
+  "passport_type": "service_with_user_context",
+  "auth_type": "s2s_authentication_authorization",
   "exp": 1758637697,
   "iat": 1758551297
 }
 ```
 
-**User JWT Claims** (embedded in certificate):
+**User JWT Claims** (embedded in Service Passport):
 ```json
 {
-  "sub": "alice-123",
-  "email": "alice@company.com",
-  "roles": ["admin", "storage-read", "storage-write"],
-  "tenant": "CompanyA",
+  "sub": "dr-alice-123",
+  "email": "alice.doctor@hospital.com",
+  "roles": ["doctor", "patient-read", "patient-write", "storage-read", "storage-write"],
+  "tenant": "HospitalA",
   "region": "US",
   "iss": "UserAuthService",
   "aud": "Storage",
@@ -171,79 +177,75 @@ type User struct {
 
 ### PKI Trust Chain
 ```
-Passport Root CA (Self-signed)
-    ├── USRegion CA (Signed by Passport)
-    │   └── Account-US Certificate (Signed by USRegion)
-    ├── EuropeRegion CA (Signed by Passport)
-    │   └── Account-Europe Certificate (Signed by EuropeRegion)
-    ├── AsiaRegion CA (Signed by Passport)
-    │   └── Account-Asia Certificate (Signed by AsiaRegion)
-    └── GlobalRegion CA (Signed by Passport)
-        └── Storage Certificate (Signed by GlobalRegion)
+Prod Root CA (Self-signed)
+    ├── Prod Region US CA (Signed by Passport)
+    │   ├── PatientService-US Certificate (Signed by Prod Region US)
+    │   └── MediaService-US Certificate (Signed by Prod Region US)
+    ├── Prod Region Europe CA (Signed by Passport)
+    │   ├── PatientService-Europe Certificate (Signed by Prod Region Europe)
+    │   └── MediaService-Europe Certificate (Signed by Prod Region Europe)
+    ├── Prod Region Asia CA (Signed by Passport)
+    │   ├── PatientService-Asia Certificate (Signed by Prod Region Asia)
+    │   └── MediaService-Asia Certificate (Signed by Prod Region Asia)
+    └── Prod Region Global CA (Signed by Passport)
+        └── StorageService Certificate (Signed by Prod Region Global)
 ```
 
 ### User Authentication Trust
 ```
-UserAuth Module (Independent Key Pair)
-    ├── Signs User JWTs for all users
-    ├── Validates extracted User JWTs
-    └── Provides authorization decisions
+S2S Authentication + Authorization Module (Independent Key Pair)
+    ├── Signs User JWTs for all healthcare users
+    ├── Validates extracted User JWTs from Service Passports
+    └── Provides healthcare authorization decisions
 ```
 
-## Cross-Region Access Pattern
-
-**Scenario**: Alice (US Account) accessing Storage (Global)
-
-1. **Certificate Validation**:
-   - Alice's certificate signed by USRegion CA
-   - USRegion CA signed by Passport root CA
-   - Storage certificate signed by GlobalRegion CA  
-   - GlobalRegion CA signed by Passport root CA
-   - **Result**: Both chains trace to same Passport root → Trust established
-
-2. **User Context Preservation**:
-   - Alice's user JWT embedded in US certificate
-   - JWT contains Alice's roles and tenant information
-   - Storage extracts user context regardless of regional boundaries
-   - **Result**: User-level permissions apply globally
 
 ## Module Responsibilities
 
 ### `internal/pki`
-- Certificate creation and management
-- JWT signing with certificate chains
-- Certificate chain validation
-- Core PKI operations
+- Service Certificate creation and management
+- JWT signing with Service Certificate chains
+- Service Certificate chain validation
+- Core PKI operations for S2S Authentication
 
-### `internal/userauth`  
-- User JWT creation and validation
-- Certificate extension management
-- User authorization logic
-- Account certificate creation with embedded user context
+### `internal/s2s-auth-authz`  
+- User JWT creation and validation for healthcare users
+- Service Certificate extension management (Service Passport creation)
+- Healthcare user authorization logic
+- Service Passport creation with embedded user context using `CreateServicePassport()`
+- Service Passport JWT extraction using `ExtractUserJWTFromServicePassport()`
+- Service Passport JWT creation using `CreateServicePassportJWT()`
+- Service Passport validation using `ValidateServicePassportAndExtractUser()`
 
 ### `internal/jwks`
-- JWKS format generation
+- JWKS format generation for Service Certificates
 - Public key extraction and encoding
-- Certificate chain encoding for JWKS
+- Service Certificate chain encoding for JWKS
 
 ### Command Applications
-- **basic-demo**: Demonstrates pure PKI certificate chain validation
-- **enhanced-demo**: Shows two-layer security with embedded user JWTs
-- **jwt-inspector**: Utility for examining certificate extensions and embedded JWTs
+- **s2s-authn-demo**: Demonstrates pure PKI Service Certificate chain validation (S2S Authentication)
+- **s2s-authn-user-authz-demo**: Shows two-layer security with embedded user JWTs (S2S Authentication + Authorization via Service Passports)
+- **jwt-extractor-demo**: Utility for examining Service Certificate extensions and embedded JWTs in Service Passports
 
-## Scalability Considerations
+## Key Function Reference
 
-### Regional Scaling
-- New regions: Add new intermediate CA under Passport root
-- Regional independence: Each region manages its own account certificates
-- Cross-region access: Automatic via shared root trust
+### Service Passport Creation
+```go
+// Create a Service Passport (Service Certificate with embedded User JWT)
+serviceCert, servicePriv, err := s2sauthz.CreateServicePassport(
+    serviceName, user, userJWT, prodRegionCert, prodRegionPriv)
 
-### User Scaling  
-- User management: Independent of PKI certificate lifecycle
-- Role updates: Change user JWT without certificate reissuance
-- Tenant isolation: User JWTs include tenant context
+// Create Service Passport JWT with user context
+servicePassportJWT, err := s2sauthz.CreateServicePassportJWT(
+    claims, user, servicePriv, serviceCert, prodRegionCert)
+```
 
-### Performance Optimization
-- Certificate caching: Cache validated certificate chains
-- JWT reuse: User JWTs have independent expiration from account certificates
-- Validation shortcuts: Skip redundant chain validations for known good certificates
+### Service Passport Validation
+```go
+// Validate Service Passport and extract user context
+servicePassportToken, user, userJWT, err := s2sauthz.ValidateServicePassportAndExtractUser(
+    signedToken, prodRootCert, userAuthModule)
+
+// Extract User JWT from Service Passport certificate
+userJWT, err := s2sauthz.ExtractUserJWTFromServicePassport(serviceCert)
+```

@@ -1,4 +1,4 @@
-package userauth
+package s2sauthauthorization
 
 import (
 	"crypto/ecdsa"
@@ -18,7 +18,7 @@ import (
 // Custom OID for embedding user JWT in certificate extensions
 var UserJWTExtensionOID = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 999, 1, 1} // Private enterprise OID
 
-// User represents a user that will be embedded in the Account certificate
+// User represents a user that will be embedded in the Service Passport
 type User struct {
 	ID     string   `json:"id"`
 	Email  string   `json:"email"`
@@ -27,13 +27,13 @@ type User struct {
 	Region string   `json:"region"`
 }
 
-// UserAuthModule handles user JWT creation and validation
+// UserAuthModule handles user JWT creation and validation for S2S Authentication + Authorization
 type UserAuthModule struct {
 	userSigningKey *ecdsa.PrivateKey
 	userPublicKey  *ecdsa.PublicKey
 }
 
-// NewUserAuthModule creates a new user authentication module
+// NewUserAuthModule creates a new user authentication module for S2S Auth + Authz
 func NewUserAuthModule() (*UserAuthModule, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -115,14 +115,14 @@ func getStringClaim(claims jwt.MapClaims, key string) string {
 	return ""
 }
 
-// CreateAccountCertWithUserJWT creates an Account certificate with embedded user JWT
-func CreateAccountCertWithUserJWT(name string, user User, userJWT string, interCert *x509.Certificate, interPriv *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey, error) {
+// CreateServicePassport creates a Service Passport (Service Certificate with embedded user JWT for S2S Authentication + Authorization)
+func CreateServicePassport(serviceName string, user User, userJWT string, prodRegionCert *x509.Certificate, prodRegionPriv *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey, error) {
 	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Create custom extension with user JWT
+	// Create custom extension with user JWT (this enables S2S Authentication + Authorization)
 	userJWTExtension := pkix.Extension{
 		Id:       UserJWTExtensionOID,
 		Critical: false,
@@ -131,7 +131,7 @@ func CreateAccountCertWithUserJWT(name string, user User, userJWT string, interC
 
 	template := x509.Certificate{
 		SerialNumber:    big.NewInt(3),
-		Subject:         pkix.Name{CommonName: name, Organization: []string{user.Tenant}},
+		Subject:         pkix.Name{CommonName: serviceName, Organization: []string{user.Tenant}},
 		NotBefore:       time.Now(),
 		NotAfter:        time.Now().Add(365 * 24 * time.Hour),
 		KeyUsage:        x509.KeyUsageDigitalSignature,
@@ -139,7 +139,7 @@ func CreateAccountCertWithUserJWT(name string, user User, userJWT string, interC
 		ExtraExtensions: []pkix.Extension{userJWTExtension},
 	}
 
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, interCert, priv.Public(), interPriv)
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, prodRegionCert, priv.Public(), prodRegionPriv)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -152,51 +152,53 @@ func CreateAccountCertWithUserJWT(name string, user User, userJWT string, interC
 	return cert, priv, nil
 }
 
-// ExtractUserJWTFromCert extracts the user JWT from a certificate's extensions
-func ExtractUserJWTFromCert(cert *x509.Certificate) (string, error) {
+// ExtractUserJWTFromServicePassport extracts the user JWT from a Service Passport's certificate extensions
+func ExtractUserJWTFromServicePassport(cert *x509.Certificate) (string, error) {
 	for _, ext := range cert.Extensions {
 		if ext.Id.Equal(UserJWTExtensionOID) {
 			return string(ext.Value), nil
 		}
 	}
-	return "", fmt.Errorf("no user JWT found in certificate")
+	return "", fmt.Errorf("no user JWT found in Service Passport certificate")
 }
 
-// SignAccountJWTWithUser signs an Account JWT with user context
-func SignAccountJWTWithUser(claims jwt.MapClaims, user User, priv *ecdsa.PrivateKey, leafCert, interCert *x509.Certificate) (string, error) {
-	// Add user context to the Account JWT claims
+// CreateServicePassportJWT creates a Service Passport JWT with embedded user context (enables S2S Authentication + Authorization)
+func CreateServicePassportJWT(claims jwt.MapClaims, user User, priv *ecdsa.PrivateKey, leafCert, prodRegionCert *x509.Certificate) (string, error) {
+	// Add user context to the Service Passport JWT claims
 	claims["user_id"] = user.ID
 	claims["user_email"] = user.Email
 	claims["user_tenant"] = user.Tenant
 	claims["has_embedded_user_auth"] = true
+	claims["passport_type"] = "service_with_user_context"
+	claims["auth_type"] = "s2s_authentication_authorization" // Service-to-Service Authentication + Authorization
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES384, claims)
 	x5c := []string{
 		base64.StdEncoding.EncodeToString(leafCert.Raw),
-		base64.StdEncoding.EncodeToString(interCert.Raw),
+		base64.StdEncoding.EncodeToString(prodRegionCert.Raw),
 	}
 	token.Header["x5c"] = x5c
 	return token.SignedString(priv)
 }
 
-// ValidateAccountJWTAndExtractUser validates Account JWT and extracts embedded user JWT
-func ValidateAccountJWTAndExtractUser(signedToken string, rootCert *x509.Certificate, userAuth *UserAuthModule) (*jwt.Token, *User, string, error) {
+// ValidateServicePassportAndExtractUser validates a Service Passport (Service Certificate with embedded User JWT for S2S Authentication + Authorization) and extracts user context
+func ValidateServicePassportAndExtractUser(signedToken string, prodRootCert *x509.Certificate, userAuth *UserAuthModule) (*jwt.Token, *User, string, error) {
 	var extractedUserJWT string
 	var extractedUser *User
 
-	// Parse and validate the Account JWT
-	accountToken, err := jwt.Parse(signedToken, func(token *jwt.Token) (interface{}, error) {
+	// Parse and validate the Service Passport JWT
+	servicePassportToken, err := jwt.Parse(signedToken, func(token *jwt.Token) (interface{}, error) {
 		// Extract and validate certificate chain from x5c header
 		x5cInterface, ok := token.Header["x5c"]
 		if !ok {
-			return nil, fmt.Errorf("missing x5c header")
+			return nil, fmt.Errorf("missing x5c header in service passport")
 		}
 		x5cStrings, ok := x5cInterface.([]interface{})
 		if !ok || len(x5cStrings) < 2 {
-			return nil, fmt.Errorf("invalid x5c format")
+			return nil, fmt.Errorf("invalid x5c format in service passport")
 		}
 
-		// Decode certificates from x5c
+		// Decode service certificates from x5c
 		certs := make([]*x509.Certificate, len(x5cStrings))
 		for i, s := range x5cStrings {
 			str, ok := s.(string)
@@ -214,30 +216,30 @@ func ValidateAccountJWTAndExtractUser(signedToken string, rootCert *x509.Certifi
 			certs[i] = cert
 		}
 
-		// Build certificate chain and verify
+		// Build service certificate chain and verify against Prod Root
 		leaf := certs[0]
-		intermediates := x509.NewCertPool()
+		prodRegionCerts := x509.NewCertPool()
 		for i := 1; i < len(certs); i++ {
-			intermediates.AddCert(certs[i])
+			prodRegionCerts.AddCert(certs[i])
 		}
 
-		roots := x509.NewCertPool()
-		roots.AddCert(rootCert)
+		prodRoots := x509.NewCertPool()
+		prodRoots.AddCert(prodRootCert)
 
 		opts := x509.VerifyOptions{
-			Roots:         roots,
-			Intermediates: intermediates,
+			Roots:         prodRoots,
+			Intermediates: prodRegionCerts,
 		}
 
 		_, err := leaf.Verify(opts)
 		if err != nil {
-			return nil, fmt.Errorf("certificate chain validation failed: %v", err)
+			return nil, fmt.Errorf("service certificate chain validation failed against Prod Root: %v", err)
 		}
 
-		// Extract user JWT from certificate extension
-		userJWT, err := ExtractUserJWTFromCert(leaf)
+		// Extract user JWT from Service Passport certificate extension (enables S2S Authentication + Authorization)
+		userJWT, err := ExtractUserJWTFromServicePassport(leaf)
 		if err != nil {
-			return nil, fmt.Errorf("failed to extract user JWT: %v", err)
+			return nil, fmt.Errorf("failed to extract user JWT from Service Passport certificate: %v", err)
 		}
 
 		// Validate extracted user JWT
@@ -257,7 +259,7 @@ func ValidateAccountJWTAndExtractUser(signedToken string, rootCert *x509.Certifi
 		return nil, nil, "", err
 	}
 
-	return accountToken, extractedUser, extractedUserJWT, nil
+	return servicePassportToken, extractedUser, extractedUserJWT, nil
 }
 
 // AuthorizeUserAction checks if a user has permission for a specific action
@@ -265,19 +267,43 @@ func AuthorizeUserAction(user *User, action string) bool {
 	switch action {
 	case "storage-read":
 		for _, role := range user.Roles {
-			if role == "storage-read" || role == "storage-write" || role == "admin" {
+			if role == "storage-read" || role == "storage-write" || role == "admin" || role == "doctor" {
 				return true
 			}
 		}
 	case "storage-write":
 		for _, role := range user.Roles {
-			if role == "storage-write" || role == "admin" {
+			if role == "storage-write" || role == "admin" || role == "doctor" {
+				return true
+			}
+		}
+	case "patient-read":
+		for _, role := range user.Roles {
+			if role == "patient-read" || role == "patient-write" || role == "doctor" || role == "nurse" || role == "admin" {
+				return true
+			}
+		}
+	case "patient-write":
+		for _, role := range user.Roles {
+			if role == "patient-write" || role == "doctor" || role == "admin" {
+				return true
+			}
+		}
+	case "media-read":
+		for _, role := range user.Roles {
+			if role == "media-read" || role == "media-write" || role == "doctor" || role == "nurse" || role == "patient" || role == "admin" {
+				return true
+			}
+		}
+	case "media-write":
+		for _, role := range user.Roles {
+			if role == "media-write" || role == "doctor" || role == "admin" {
 				return true
 			}
 		}
 	case "admin":
 		for _, role := range user.Roles {
-			if role == "admin" {
+			if role == "admin" || role == "doctor" {
 				return true
 			}
 		}

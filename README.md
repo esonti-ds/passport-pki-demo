@@ -1,247 +1,219 @@
-# Passport PKI Demo
+# Passport PKI Demo Suite
 
-A comprehensive demonstration of hierarchical Public Key Infrastructure (PKI) with JWT authentication, featuring both basic certificate chain validation and advanced user JWT embedding.
+This repository contains three comprehensive demos that showcase a two-layer security architecture combining PKI certificates for Service-to-Service Authentication and Service Passports (Service Certificates with embedded User JWTs) for enterprise-grade authentication and authorization.
 
-## 🏗️ Project Structure
+## Demo Naming Convention
 
+The demos follow a clear naming pattern that reflects their functional purpose:
+
+- **`s2s-authn-demo`**: **Service-to-Service Authentication** - Basic PKI certificate chain validation (S2S Authn)
+- **`s2s-authn-user-authz-demo`**: **Service-to-Service Authentication + User Authorization** - PKI + embedded user JWTs (S2S Authn + Authz via Service Passports)
+- **`jwt-extractor-demo`**: **JWT Extraction Tool** - Technical inspection of Service Passport JWT mechanisms
+
+## Overview
+
+The demo suite demonstrates a distributed service architecture with:
+- **Patient Service** (Prod Region - US/Europe/Asia)
+- **Media Service** (Prod Region - US/Europe/Asia) 
+- **Storage Service** (Global)
+
+### Two-Layer Security Model:
+- **Layer 1**: Service Certificate Chain (S2S Authn)
+  - Prod Region services are confined to their respective regions
+  - Prod Region services can access global services
+  - Certificate chain validation enforces access boundaries
+- **Layer 2**: Service Passports with Embedded User JWT (S2S Authn + Authz)
+  - Fine-grained resource permissions per user
+  - Role-based access control across services
+  - User context preserved across service boundaries
+
+This architecture enables scalable, cross-Prod Region service access control with fine-grained user permissions.
+
+## Demo Descriptions
+
+### 🏗️ Service-to-Service Authentication Demo (`cmd/s2s-authn-demo/main.go`)
+
+**Purpose**: Fundamental PKI certificate chain creation and validation for healthcare services (S2S Authn)
+
+**What it demonstrates**:
+- Complete PKI hierarchy creation: Passport (Prod Root) → Prod Region CAs → Healthcare Services
+- Cross-region access where Prod Region healthcare services can access global Storage services
+- JWKS (JSON Web Key Sets) generation for each certificate authority
+- Certificate chain validation back to trusted Prod Root
+
+**Service Architecture**:
 ```
-passport-pki-demo/
-├── cmd/                          # Command-line applications
-│   ├── basic-demo/              # Basic PKI certificate chain demo
-│   ├── enhanced-demo/           # Advanced demo with embedded user JWTs
-│   └── jwt-inspector/           # Tool to inspect embedded JWTs
-├── internal/                    # Internal packages (not for external use)
-│   ├── pki/                     # Core PKI functionality
-│   ├── userauth/                # User authentication and JWT embedding
-│   └── jwks/                    # JSON Web Key Set utilities
-├── examples/                    # Example code and demonstrations
-├── docs/                        # Detailed documentation
-└── README.md                    # This file
+Passport (Prod Root)
+├── Prod Region Global → StorageService (Global)
+├── Prod Region US → PatientService-US, MediaService-US (Regional)
+├── Prod Region Europe → PatientService-Europe, MediaService-Europe (Regional)
+└── Prod Region Asia → PatientService-Asia, MediaService-Asia (Regional)
 ```
 
-## 🎯 Features
+**Key Features**:
+- ✅ Regional certificate authorities for distributed healthcare management
+- ✅ Cross-region JWT validation through shared root CA
+- ✅ JWKS generation for service discovery
+- ✅ End-to-end certificate chain verification
+- ✅ Service-as-Passport authentication model
 
-### Core PKI Functionality
-- ✅ Hierarchical certificate chain creation (Root → Intermediate → End Entity)
-- ✅ Cross-region certificate validation
-- ✅ JWKS (JSON Web Key Set) generation
-- ✅ JWT signing with embedded certificate chains (x5c)
-- ✅ Certificate chain validation
+### 🔐 Service-to-Service Authentication + User Authorization Demo (`cmd/s2s-authn-user-authz-demo/main.go`)
 
-### Advanced User Authentication
-- ✅ User JWT embedding in certificate extensions
-- ✅ Two-layer security (Account certificates + User JWTs)
-- ✅ Role-based access control (RBAC)
-- ✅ Cross-region user context preservation
-- ✅ Fine-grained authorization policies
+**Purpose**: Two-layer security architecture with healthcare PKI + embedded user JWTs
 
-## 🚀 Quick Start
+**What it demonstrates**:
+- Healthcare user profile creation with medical roles and tenant assignments
+- Embedding user JWTs into healthcare service certificates as X.509 extensions
+- Role-based access control through JWT validation for medical scenarios
+- Separation of service authentication (PKI) vs user authorization (JWT)
+
+**Sample Healthcare Users & Access Results**:
+- **Alice (Doctor)**: ✅ Full patient data read/write access (HospitalA, doctor privileges)
+- **Bob (Nurse)**: ✅ Patient read + media access (ClinicB, nurse privileges) 
+- **Charlie (Patient)**: ✅ Limited own data access (PatientPortal, patient privileges)
+
+**Key Features**:
+- ✅ User JWT embedding in healthcare service certificate extensions
+- ✅ Fine-grained medical role-based access control
+- ✅ Multi-tenant support with regional healthcare distribution
+- ✅ Comprehensive healthcare authorization testing scenarios
+- ✅ HIPAA-compliant user context preservation
+
+### 🔍 JWT Extractor Demo (`cmd/jwt-extractor-demo/main.go`)
+
+**Purpose**: Technical inspection and analysis of embedded JWT extraction for healthcare services
+
+**What it demonstrates**:
+- JWT embedding mechanism in X.509 healthcare service certificate extensions
+- JWT extraction and validation process from healthcare service certificates
+- Healthcare user JWT content decoding and analysis
+- Certificate extension inspection and identification
+
+**Technical Details**:
+- **Custom OID**: `1.3.6.1.4.1.999.1.1` for User JWT extension
+- **JWT Contents**: Healthcare user ID, email, medical roles, tenant, region, expiration
+- **Extension Analysis**: Identifies and explains certificate extensions
+- **Validation Workflow**: Step-by-step JWT extraction process for healthcare services
+
+**Key Features**:
+- ✅ Healthcare JWT embedding/extraction demonstration
+- ✅ Medical service certificate extension analysis
+- ✅ Healthcare user JWT content inspection and decoding
+- ✅ Healthcare service integration workflow documentation
+
+## How to Run the Demos
 
 ### Prerequisites
+
 - Go 1.24.6 or later
-- No external dependencies except `github.com/golang-jwt/jwt/v5`
+- This repository cloned locally
 
-### Installation
+### Running Individual Demos
+
+#### Service-to-Service Authentication Demo
 ```bash
-git clone <repository-url>
-cd passport-pki-demo
-go mod tidy
+cd /path/to/passport-pki-demo
+go run cmd/s2s-authn-demo/main.go
 ```
 
-### Run Basic Demo
+#### Service-to-Service Authentication + User Authorization Demo
 ```bash
-go run cmd/basic-demo/main.go
+cd /path/to/passport-pki-demo
+go run cmd/s2s-authn-user-authz-demo/main.go
 ```
 
-### Run Enhanced Demo (with User JWTs)
+#### JWT Extractor Demo
 ```bash
-go run cmd/enhanced-demo/main.go
+cd /path/to/passport-pki-demo
+go run cmd/jwt-extractor-demo/main.go
 ```
 
-### Inspect JWT Embeddings
+### Running All Demos
 ```bash
-go run cmd/jwt-inspector/main.go
+# Run all demos sequentially
+go run cmd/s2s-authn-demo/main.go
+go run cmd/s2s-authn-user-authz-demo/main.go
+go run cmd/jwt-extractor-demo/main.go
 ```
 
-## 📋 Certificate Hierarchy
+## Expected Output Summary
 
-```
-Passport (Root CA)
-├── GlobalRegion (Intermediate CA)
-│   └── Storage (End Entity)
-├── USRegion (Intermediate CA)  
-│   └── Account-US (End Entity)
-├── EuropeRegion (Intermediate CA)
-│   └── Account-Europe (End Entity)
-└── AsiaRegion (Intermediate CA)
-    └── Account-Asia (End Entity)
-```
+### Service-to-Service Authentication Demo Output
+- Healthcare PKI hierarchy creation with regional CAs
+- Cross-region healthcare service JWT signing and validation
+- JWKS generation for healthcare service discovery
+- Certificate chain verification success messages
+- Service-as-Passport authentication demonstrations
 
-## 🔐 Security Architecture
+### Service-to-Service Authentication + User Authorization Demo Output
+- Healthcare user authentication module initialization
+- Sample healthcare user creation with medical role assignments
+- Healthcare service certificate creation with embedded JWTs
+- Healthcare access scenario testing with permission results
+- Healthcare service architecture benefits summary
 
-### Two-Layer Security Model
+### JWT Extractor Demo Output
+- Demo healthcare service certificate creation with embedded JWT
+- JWT extraction and validation confirmation
+- Decoded JWT header and payload contents showing healthcare roles
+- Certificate extension analysis and identification
+- Healthcare service integration workflow explanation
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Storage Service                              │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │               JWT Validation                            │    │
-│  │  1. Validate Account JWT signature                      │    │
-│  │  2. Verify certificate chain → Passport root CA         │    │
-│  │  3. Extract user JWT from certificate extension         │    │
-│  │  4. Validate user JWT with UserAuth module              │    │
-│  │  5. Apply user-based authorization rules                │    │
-│  └─────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-                              ↑
-                    Account JWT with x5c chain
-                              │
-┌─────────────────────────────────────────────────────────────────┐
-│                    Account Service                              │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │           Certificate Structure                         │    │
-│  │  ┌─────────────────────────────────────────────────┐    │    │
-│  │  │  Account Certificate (x509)                     │    │    │
-│  │  │  ├── Subject: Account-Alice (CompanyA)          │    │    │
-│  │  │  ├── Signed by: USRegion CA                     │    │    │
-│  │  │  └── Extensions:                                │    │    │
-│  │  │      └── OID 1.3.6.1.4.1.999.1.1 (User JWT)     │    │    │
-│  │  │          └── "eyJ0eXAiOiJKV1QiLCJhbGciOi..."    │    │    │
-│  │  └─────────────────────────────────────────────────┘    │    │
-│  └─────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-```
+## Architecture Benefits
 
-### Layer 1: PKI Certificate Chain Authentication
-- **Purpose**: Verify Account identity and regional authority
-- **Method**: X.509 certificate chain validation
-- **Trust Root**: Passport CA
-- **Validates**: Account authenticity, regional membership, certificate integrity
+The complete demo suite showcases a healthcare-focused Service-as-Passport architecture:
 
-### Layer 2: User JWT Authorization (Enhanced Demo)
-- **Purpose**: Fine-grained user permissions and context
-- **Method**: JWT embedded in certificate extension (OID 1.3.6.1.4.1.999.1.1)
-- **Signed by**: Separate UserAuth module
-- **Contains**: User ID, roles, tenant, permissions
+1. **� Scalable Healthcare PKI Infrastructure**: Regional CAs enable distributed healthcare certificate management
+2. **🌐 Cross-Region Medical Services Authentication**: Regional healthcare services can access global storage services
+3. **�‍⚕️ Fine-Grained Medical Authorization**: User JWTs provide individual-level access control for healthcare roles
+4. **🔄 Separation of Concerns**: PKI handles service identity, JWTs handle user medical permissions
+5. **📋 Standards Compliance**: Uses standard X.509 extensions and JWT formats for healthcare interoperability
+6. **�️ Healthcare Storage Integration**: Clear workflow for medical services to extract and use user context
 
-## 📚 How It Works
+## Healthcare Service Architecture Patterns
 
-### Basic PKI Flow
-1. **Account signs JWT**: Uses regional certificate private key
-2. **JWT includes x5c**: Certificate chain embedded in JWT header
-3. **Storage validates**: Verifies certificate chain back to Passport root
-4. **Access granted**: If chain is valid and JWT signature matches
+### Service Authentication (Layer 1 - PKI)
+- **Regional Services**: PatientService, MediaService (confined to their regions)
+- **Global Services**: StorageService (accessible by all regional services)
+- **Certificate Validation**: Regional services must present valid certificates from their regional CA
+- **Access Control**: Regional services cannot directly access other regional services
 
-### Enhanced Flow (with User JWTs)
-1. **User JWT created**: Separate auth module creates user-specific JWT
-2. **JWT embedded**: User JWT stored in Account certificate extension
-3. **Account JWT signed**: Account service signs request with embedded user context
-4. **Two-layer validation**: Storage validates both certificate chain AND user JWT
-5. **Authorization applied**: User roles determine allowed actions
+### User Authorization (Layer 2 - Embedded JWT)
+- **Medical Roles**: Doctor, Nurse, Patient, Admin
+- **Resource Permissions**: patient-read, patient-write, media-read, storage-read, storage-write
+- **HIPAA Compliance**: User context preserved across service boundaries
+- **Tenant Isolation**: Hospital, Clinic, PatientPortal organizational boundaries
 
-## 💼 Example Usage Scenarios
+## Use Cases
 
-### Scenario 1: Cross-Region Admin Access
-```
-Alice (CompanyA Admin, US Region) → Storage (Global Region)
-✅ Account: Valid USRegion → Passport chain
-✅ User: Admin role allows read/write access
-```
+This healthcare Service-as-Passport architecture is ideal for:
 
-### Scenario 2: Limited User Access
-```
-Bob (CompanyB User, Europe Region) → Storage (Global Region)  
-✅ Account: Valid EuropeRegion → Passport chain
-⚠️  User: User role allows read-only access
-```
+- **Healthcare environments** requiring both service and user-level security
+- **Multi-region medical deployments** with centralized authentication
+- **Medical storage services** needing fine-grained access control
+- **Healthcare microservices architectures** requiring embedded user context
+- **HIPAA compliance scenarios** demanding certificate-based authentication
+- **Telemedicine platforms** with cross-region patient data access
+- **Medical imaging services** requiring role-based authorization
+- **Electronic Health Record (EHR) systems** with multi-tenant support
 
-### Scenario 3: Guest Access Denied
-```
-Charlie (CompanyC Guest, Asia Region) → Storage (Global Region)
-✅ Account: Valid AsiaRegion → Passport chain
-❌ User: Guest role has no storage permissions
-```
+## Security Features
 
-## 🛠️ Development
+- ✅ **Certificate Chain Validation**: Cryptographic verification back to root CA
+- ✅ **Regional Authenticity**: Certificate authorities bound to specific regions
+- ✅ **User Context Preservation**: Individual user information embedded in certificates
+- ✅ **Role-Based Access Control**: Fine-grained permissions through JWT claims
+- ✅ **Cross-Region Support**: Unified authentication across distributed infrastructure
+- ✅ **Tenant Isolation**: Multi-tenant support with organizational boundaries
 
-### Adding New Regional CAs
-```go
-newRegionCert, newRegionPriv, err := pki.CreateIntermediateCA("NewRegion", rootCert, rootPriv)
-```
+## Next Steps
 
-### Creating User with Custom Roles
-```go
-user := userauth.User{
-    ID:     "user-123",
-    Email:  "user@company.com",
-    Roles:  []string{"custom-role", "storage-read"},
-    Tenant: "MyCompany",
-    Region: "US",
-}
-```
+After running the demos, you can:
 
-### Custom Authorization Rules
-```go
-func CustomAuthorization(user *userauth.User, action string) bool {
-    // Implement custom logic here
-    return userauth.AuthorizeUserAction(user, action)
-}
-```
+1. **Explore the Code**: Examine the internal packages (`internal/pki`, `internal/s2s-auth-authz`, `internal/jwks`)
+2. **Customize Users**: Modify user roles and permissions in the enhanced demo
+3. **Extend Regions**: Add new regional CAs to the PKI hierarchy
+4. **Integration Testing**: Implement the architecture in your own services
+5. **Security Analysis**: Review the cryptographic implementations and security models
 
-## 🌍 Real-World Applications
-
-This architecture is ideal for:
-- **Microservices**: Service-to-service authentication with user context
-- **Multi-tenant SaaS**: Tenant isolation with user-level permissions
-- **API Gateways**: Single token containing both identity and authorization
-- **Zero Trust Networks**: Cryptographic identity + fine-grained access control
-- **Enterprise PKI**: Scalable certificate management across regions
-- **OAuth/OIDC Systems**: JWT validation with certificate backing
-
-## 🔧 Configuration
-
-### Custom OID for User JWT Extension
-The project uses OID `1.3.6.1.4.1.999.1.1` for embedding user JWTs. This is a private enterprise OID suitable for demonstration purposes. In production, use your organization's assigned OID.
-
-### Key Algorithms
-- **Root/Intermediate CAs**: ECDSA P-384
-- **End Entity Certificates**: ECDSA P-384
-- **User JWTs**: ECDSA P-256 (separate key)
-- **Certificate Validity**: Root (10 years), Intermediate (5 years), End Entity (1 year)
-
-## 📖 Documentation
-
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - Detailed architecture explanation
-- [`docs/SECURITY.md`](docs/SECURITY.md) - Security considerations and best practices
-- [`docs/API.md`](docs/API.md) - API documentation for internal packages
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📄 License
-
-This project is provided as-is for educational and demonstration purposes.
-
-## 🆘 Troubleshooting
-
-### Common Issues
-
-**Certificate Validation Fails**
-- Ensure certificate chains are properly constructed
-- Check that the root CA is trusted
-- Verify certificate dates (not expired)
-
-**User JWT Not Found**
-- Confirm the certificate includes the custom extension
-- Check the OID matches `userauth.UserJWTExtensionOID`
-- Verify the JWT was properly embedded during certificate creation
-
-**Import Errors**
-- Run `go mod tidy` to resolve dependencies
-- Ensure you're using Go 1.24.6 or later
-- Check that internal package imports use the correct module path
+For technical implementation details, see the source code in the `internal/` directory and the comprehensive examples provided.

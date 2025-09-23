@@ -15,8 +15,8 @@ func GenerateECDSAKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 }
 
-// CreateRootCA creates a self-signed root CA certificate
-func CreateRootCA(name string) (*x509.Certificate, *ecdsa.PrivateKey, error) {
+// CreateProdRootCA creates a self-signed Prod Root CA certificate
+func CreateProdRootCA(name string) (*x509.Certificate, *ecdsa.PrivateKey, error) {
 	priv, err := GenerateECDSAKey()
 	if err != nil {
 		return nil, nil, err
@@ -45,8 +45,8 @@ func CreateRootCA(name string) (*x509.Certificate, *ecdsa.PrivateKey, error) {
 	return cert, priv, nil
 }
 
-// CreateIntermediateCA creates an intermediate CA signed by the parent CA
-func CreateIntermediateCA(name string, parentCert *x509.Certificate, parentPriv *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey, error) {
+// CreateProdRegionCA creates a Prod Region CA signed by the Prod Root CA
+func CreateProdRegionCA(regionName string, prodRootCert *x509.Certificate, prodRootPriv *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey, error) {
 	priv, err := GenerateECDSAKey()
 	if err != nil {
 		return nil, nil, err
@@ -54,7 +54,7 @@ func CreateIntermediateCA(name string, parentCert *x509.Certificate, parentPriv 
 
 	template := x509.Certificate{
 		SerialNumber:          big.NewInt(2),
-		Subject:               pkix.Name{CommonName: name},
+		Subject:               pkix.Name{CommonName: regionName},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(5 * 365 * 24 * time.Hour), // 5 years
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
@@ -63,7 +63,7 @@ func CreateIntermediateCA(name string, parentCert *x509.Certificate, parentPriv 
 		MaxPathLen:            0, // No further CAs
 	}
 
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, parentCert, priv.Public(), parentPriv)
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, prodRootCert, priv.Public(), prodRootPriv)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -76,8 +76,8 @@ func CreateIntermediateCA(name string, parentCert *x509.Certificate, parentPriv 
 	return cert, priv, nil
 }
 
-// CreateEndEntityCert creates an end-entity certificate signed by an intermediate CA
-func CreateEndEntityCert(name string, interCert *x509.Certificate, interPriv *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey, error) {
+// CreateServiceCert creates a Service Certificate (for S2S Authn) signed by a Prod Region CA
+func CreateServiceCert(serviceName string, prodRegionCert *x509.Certificate, prodRegionPriv *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey, error) {
 	priv, err := GenerateECDSAKey()
 	if err != nil {
 		return nil, nil, err
@@ -85,14 +85,14 @@ func CreateEndEntityCert(name string, interCert *x509.Certificate, interPriv *ec
 
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(3),
-		Subject:      pkix.Name{CommonName: name},
+		Subject:      pkix.Name{CommonName: serviceName},
 		NotBefore:    time.Now(),
 		NotAfter:     time.Now().Add(365 * 24 * time.Hour), // 1 year
 		KeyUsage:     x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 	}
 
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, interCert, priv.Public(), interPriv)
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, prodRegionCert, priv.Public(), prodRegionPriv)
 	if err != nil {
 		return nil, nil, err
 	}
