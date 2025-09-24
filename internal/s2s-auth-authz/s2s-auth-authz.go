@@ -27,27 +27,27 @@ type User struct {
 	Region string   `json:"region"`
 }
 
-// UserAuthModule handles user JWT creation and validation for S2S Authentication + Authorization
-type UserAuthModule struct {
-	userSigningKey *ecdsa.PrivateKey
-	userPublicKey  *ecdsa.PublicKey
+// PKIModule handles user JWT creation and validation for S2S Authentication + Authorization
+type PKIModule struct {
+	signingKey *ecdsa.PrivateKey
+	publicKey  *ecdsa.PublicKey
 }
 
-// NewUserAuthModule creates a new user authentication module for S2S Auth + Authz
-func NewUserAuthModule() (*UserAuthModule, error) {
+// NewPKIModule creates a new user authentication module for S2S Auth + Authz
+func NewPKIModule() (*PKIModule, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err
 	}
 
-	return &UserAuthModule{
-		userSigningKey: key,
-		userPublicKey:  &key.PublicKey,
+	return &PKIModule{
+		signingKey: key,
+		publicKey:  &key.PublicKey,
 	}, nil
 }
 
 // CreateUserJWT creates a JWT for a specific user
-func (uam *UserAuthModule) CreateUserJWT(user User) (string, error) {
+func (uam *PKIModule) CreateUserJWT(user User) (string, error) {
 	claims := jwt.MapClaims{
 		"sub":    user.ID,
 		"email":  user.Email,
@@ -62,16 +62,16 @@ func (uam *UserAuthModule) CreateUserJWT(user User) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
-	return token.SignedString(uam.userSigningKey)
+	return token.SignedString(uam.signingKey)
 }
 
 // ValidateUserJWT validates an extracted user JWT
-func (uam *UserAuthModule) ValidateUserJWT(tokenString string) (*jwt.Token, *User, error) {
+func (uam *PKIModule) ValidateUserJWT(tokenString string) (*jwt.Token, *User, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return uam.userPublicKey, nil
+		return uam.publicKey, nil
 	})
 
 	if err != nil {
@@ -182,7 +182,7 @@ func CreateServicePassportJWT(claims jwt.MapClaims, user User, priv *ecdsa.Priva
 }
 
 // ValidateServicePassportAndExtractUser validates a Service Passport (Service Certificate with embedded User JWT for S2S Authentication + Authorization) and extracts user context
-func ValidateServicePassportAndExtractUser(signedToken string, prodRootCert *x509.Certificate, userAuth *UserAuthModule) (*jwt.Token, *User, string, error) {
+func ValidateServicePassportAndExtractUser(signedToken string, prodRootCert *x509.Certificate, userAuth *PKIModule) (*jwt.Token, *User, string, error) {
 	var extractedUserJWT string
 	var extractedUser *User
 

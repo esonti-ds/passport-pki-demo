@@ -28,7 +28,7 @@ func createDemoCert() (*x509.Certificate, string, error) {
 	}
 
 	// Create user auth module and JWT
-	userAuth, err := s2sauthz.NewUserAuthModule()
+	userAuth, err := s2sauthz.NewPKIModule()
 	if err != nil {
 		return nil, "", err
 	}

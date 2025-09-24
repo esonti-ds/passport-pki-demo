@@ -115,9 +115,9 @@ func main() {
 	fmt.Println("- Layer 2: User Authz via Service Passports (Service Certs + User JWTs)")
 	fmt.Println()
 
-	// Step 1: Initialize User Authentication Module
-	fmt.Println("1. Initializing User Authentication Module")
-	userAuthModule, err := s2sauthz.NewUserAuthModule()
+	// Step 1: Initialize S2S Authz Module
+	fmt.Println("1. Initializing S2S Authz Module")
+	s2sAuthnzModule, err := s2sauthz.NewPKIModule()
 	if err != nil {
 		fmt.Printf("Error creating user auth module: %v\n", err)
 		os.Exit(1)
@@ -151,19 +151,19 @@ func main() {
 	}
 
 	// Create user JWTs
-	aliceUserJWT, err := userAuthModule.CreateUserJWT(alice)
+	aliceUserJWT, err := s2sAuthnzModule.CreateUserJWT(alice)
 	if err != nil {
 		fmt.Printf("Error creating Alice's user JWT: %v\n", err)
 		os.Exit(1)
 	}
 
-	bobUserJWT, err := userAuthModule.CreateUserJWT(bob)
+	bobUserJWT, err := s2sAuthnzModule.CreateUserJWT(bob)
 	if err != nil {
 		fmt.Printf("Error creating Bob's user JWT: %v\n", err)
 		os.Exit(1)
 	}
 
-	charlieUserJWT, err := userAuthModule.CreateUserJWT(charlie)
+	charlieUserJWT, err := s2sAuthnzModule.CreateUserJWT(charlie)
 	if err != nil {
 		fmt.Printf("Error creating Charlie's user JWT: %v\n", err)
 		os.Exit(1)
@@ -262,7 +262,7 @@ func main() {
 		fmt.Printf("      ❌ Error signing Alice's JWT: %v\n", err)
 	} else {
 		// Storage validates the Service Passport JWT and extracts user info
-		_, extractedUser, userJWT, err := s2sauthz.ValidateServicePassportAndExtractUser(aliceJWT, rootCert, userAuthModule)
+		_, extractedUser, userJWT, err := s2sauthz.ValidateServicePassportAndExtractUser(aliceJWT, rootCert, s2sAuthnzModule)
 		if err != nil {
 			fmt.Printf("      ❌ Service Passport validation failed: %v\n", err)
 		} else {
@@ -299,7 +299,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("      ❌ Error signing Bob's JWT: %v\n", err)
 	} else {
-		_, extractedUser, userJWT, err := s2sauthz.ValidateServicePassportAndExtractUser(bobJWT, rootCert, userAuthModule)
+		_, extractedUser, userJWT, err := s2sauthz.ValidateServicePassportAndExtractUser(bobJWT, rootCert, s2sAuthnzModule)
 		if err != nil {
 			fmt.Printf("      ❌ Service Passport validation failed: %v\n", err)
 		} else {
@@ -335,7 +335,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("      ❌ Error signing Charlie's JWT: %v\n", err)
 	} else {
-		_, extractedUser, userJWT, err := s2sauthz.ValidateServicePassportAndExtractUser(charlieJWT, rootCert, userAuthModule)
+		_, extractedUser, userJWT, err := s2sauthz.ValidateServicePassportAndExtractUser(charlieJWT, rootCert, s2sAuthnzModule)
 		if err != nil {
 			fmt.Printf("      ❌ Service Passport validation failed: %v\n", err)
 		} else {
